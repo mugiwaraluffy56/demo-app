@@ -11,7 +11,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
-MONITOR_URL = os.environ.get("MONITOR_URL", "https://api-monitor-project.up.railway.app")
+MONITOR_URL = os.environ.get("MONITOR_URL", "http://localhost:8000")
 INGEST_URL  = f"{MONITOR_URL}/v1/logs"
 
 # Paths to skip — avoid logging calls to api-monitor itself

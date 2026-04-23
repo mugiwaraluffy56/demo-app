@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse
 from app.routers import users, projects, tasks, comments, external
 from monitor import ApiMonitorMiddleware
 
-API_KEY = "mkey_2NcPNy4JebHNwe3rD1jwtFkjt2kTL9KH_7Dk-7RbiCE"
+API_KEY = "mkey_0QnuZABji7verNyv-2MfJIvwpirurnAT-eymNkdpl08"
 
 app = FastAPI(title="TaskBoard API", version="1.0.0")
 app.add_middleware(ApiMonitorMiddleware, api_key=API_KEY)
