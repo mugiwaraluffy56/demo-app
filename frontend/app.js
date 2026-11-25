@@ -8,7 +8,11 @@ async function api(method, path, body) {
   const r = await fetch(API + path, opts);
   if (r.status === 204) return null;
   const data = await r.json();
-  if (!r.ok) throw new Error(data.detail || JSON.stringify(data));
+  if (!r.ok) {
+    const error = new Error(data.detail || JSON.stringify(data));
+    error.detail = data.detail;
+    throw error;
+  }
   return data;
 }
 
@@ -88,6 +92,8 @@ pages.dashboard = async () => {
       api('GET', '/tasks'),
     ]);
 
+    if (currentPage !== 'dashboard') return;
+
     document.getElementById('stats').innerHTML = `
       <div class="stat"><div class="stat-label">Users</div><div class="stat-value">${users.length}</div></div>
       <div class="stat"><div class="stat-label">Projects</div><div class="stat-value">${projects.length}</div></div>
@@ -117,6 +123,7 @@ pages.dashboard = async () => {
       </div>` : '<div class="empty"><div class="empty-icon">📋</div><p>No tasks yet. Create a project and add some tasks.</p></div>'}
     `;
   } catch (e) {
+    if (currentPage !== 'dashboard') return;
     content.innerHTML = `<div class="card"><p style="color:var(--red)">${e.message}</p></div>`;
   }
 };
@@ -135,7 +142,8 @@ pages.users = async () => {
 
 async function renderUsers(roleFilter = '') {
   const content = document.getElementById('content');
-  let users = await api('GET', '/users' + (roleFilter ? `?role=${roleFilter}` : ''));
+  const users = await api('GET', '/users' + (roleFilter ? `?role=${roleFilter}` : ''));
+  if (currentPage !== 'users') return;
 
   content.innerHTML = `
     <div class="filter-bar">
@@ -220,6 +228,7 @@ async function renderProjects(statusFilter = '') {
     api('GET', '/projects' + (statusFilter ? `?status=${statusFilter}` : '')),
     api('GET', '/users'),
   ]);
+  if (currentPage !== 'projects') return;
   const userMap = Object.fromEntries(users.map(u => [u.id, u.name]));
 
   content.innerHTML = `
@@ -316,6 +325,7 @@ async function renderTasks(filters = {}) {
     api('GET', '/users'),
     api('GET', '/projects'),
   ]);
+  if (currentPage !== 'tasks') return;
   const userMap = Object.fromEntries(users.map(u => [u.id, u.name]));
   const projMap = Object.fromEntries(projects.map(p => [p.id, p.name]));
   const projectOpts = `<option value="">All projects</option>` + projects.map(p => `<option value="${p.id}" ${filters.project_id===p.id?'selected':''}>${p.name}</option>`).join('');
@@ -640,6 +650,105 @@ async function fetchDogs() {
     el.innerHTML = urls.map(url => `<img class="dog-img" src="${url}" loading="lazy" />`).join('');
   } catch (e) { el.innerHTML = `<p style="color:var(--red)">${e.message}</p>`; }
 }
+
+// ── Chat ──────────────────────────────────────────────────────────────────────
+
+const chatHistory = [];
+let chatDraft = '';
+let chatPending = '';
+let chatError = '';
+
+function updateChat() {
+  if (currentPage !== 'chat') return;
+
+  const log = document.getElementById('chat-log');
+  const input = document.getElementById('chat-input');
+  const send = document.getElementById('chat-send');
+  const reset = document.getElementById('chat-reset');
+  const messages = chatPending
+    ? [...chatHistory, { role: 'user', content: chatPending }]
+    : chatHistory;
+
+  log.replaceChildren();
+  for (const message of messages) {
+    const bubble = document.createElement('article');
+    bubble.className = `chat-message chat-message-${message.role}`;
+    const author = document.createElement('strong');
+    author.textContent = message.role === 'user' ? 'You' : 'Assistant';
+    const text = document.createElement('p');
+    text.textContent = message.content;
+    bubble.append(author, text);
+    log.append(bubble);
+  }
+  log.scrollTop = log.scrollHeight;
+  document.getElementById('chat-empty').hidden = messages.length > 0;
+  document.getElementById('chat-status').textContent = chatPending ? 'Waiting for a reply…' : '';
+  document.getElementById('chat-error').textContent = chatError;
+  input.value = chatPending || chatDraft;
+  input.readOnly = Boolean(chatPending);
+  send.disabled = Boolean(chatPending) || !chatDraft.trim();
+  reset.disabled = Boolean(chatPending) || !(chatHistory.length || chatDraft || chatError);
+}
+
+pages.chat = () => {
+  document.getElementById('page-title').textContent = 'Chat';
+  document.getElementById('topbar-actions').innerHTML =
+    '<button type="button" class="btn btn-ghost" id="chat-reset">New chat</button>';
+  document.getElementById('content').innerHTML = `
+    <section class="card chat-panel" aria-label="Chat">
+      <p class="chat-empty" id="chat-empty">Ask a question to start a conversation.</p>
+      <div class="chat-log" id="chat-log" role="log" aria-label="Conversation" tabindex="0"></div>
+      <p class="chat-status" id="chat-status" role="status"></p>
+      <p class="chat-error" id="chat-error" role="alert"></p>
+      <form id="chat-form">
+        <label for="chat-input">Message</label>
+        <textarea id="chat-input" rows="3" maxlength="8000" required></textarea>
+        <div class="chat-actions">
+          <button type="submit" class="btn btn-primary" id="chat-send">Send</button>
+        </div>
+      </form>
+    </section>
+  `;
+
+  const input = document.getElementById('chat-input');
+  const send = document.getElementById('chat-send');
+  const reset = document.getElementById('chat-reset');
+  input.oninput = () => {
+    chatDraft = input.value;
+    send.disabled = !chatDraft.trim();
+    reset.disabled = !(chatHistory.length || chatDraft || chatError);
+  };
+  reset.onclick = () => {
+    chatHistory.length = 0;
+    chatDraft = '';
+    chatError = '';
+    updateChat();
+    input.focus();
+  };
+  document.getElementById('chat-form').onsubmit = async (event) => {
+    event.preventDefault();
+    if (chatPending || !chatDraft.trim()) return;
+
+    chatPending = chatDraft.trim();
+    chatError = '';
+    const userMessage = { role: 'user', content: chatPending };
+    updateChat();
+    try {
+      const { reply } = await api('POST', '/api/chat', {
+        messages: [...chatHistory.slice(-20), userMessage],
+      });
+      chatHistory.push(userMessage, { role: 'assistant', content: reply });
+      chatDraft = '';
+    } catch (error) {
+      chatError = 'Could not send your message. Try again.';
+      if (typeof error.detail === 'string') chatError = error.detail;
+    } finally {
+      chatPending = '';
+      updateChat();
+    }
+  };
+  updateChat();
+};
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 navigate('dashboard');

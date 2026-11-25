@@ -2,6 +2,7 @@ import pathlib
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from app.routers import chat
 from app.routers import users, projects, tasks, comments, external
 from monitor import ApiMonitorMiddleware
 
@@ -15,6 +16,7 @@ app.include_router(projects.router)
 app.include_router(tasks.router)
 app.include_router(comments.router)
 app.include_router(external.router)
+app.include_router(chat.router)
 
 
 @app.get("/health", tags=["Health"])
