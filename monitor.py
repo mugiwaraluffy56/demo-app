@@ -24,8 +24,8 @@ class ApiMonitorMiddleware(BaseHTTPMiddleware):
         self.headers = {"Authorization": f"Bearer {api_key}"}
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        # Skip noise
-        if any(request.url.path.startswith(p) for p in _SKIP):
+        # Skip chat transcripts and routine infrastructure requests
+        if request.url.path.rstrip("/") == "/api/chat" or any(request.url.path.startswith(p) for p in _SKIP):
             return await call_next(request)
 
         body_bytes = await request.body()
