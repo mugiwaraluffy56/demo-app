@@ -1,0 +1,13 @@
+name: Klyna CI read fixture
+on:
+  push:
+    branches:
+      - 'klyna/agent-18af45910cac4e8eb8615da095b08e42-user'
+permissions: {}
+jobs:
+  deliberately-fail:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo 'KLYNA_CI_FIXTURE_PR_17'
+          exit 1
